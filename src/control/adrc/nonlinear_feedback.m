@@ -75,8 +75,8 @@ classdef nonlinear_feedback < handle
             obj.tanh_params.delta = 0.5;
 
             % Limits
-            obj.integral_limit = 10;
-            obj.control_limit = 100;
+            obj.integral_limit = 1;
+            obj.control_limit = 50;  % Reasonable torque limit
         end
 
         function [u, u0] = compute(obj, e1, e2, z3, use_disturbance_comp)

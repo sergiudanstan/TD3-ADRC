@@ -164,15 +164,23 @@ classdef td3_adrc_controller < handle
             obj.last_error = e1;
 
             %% TD3 parameter adaptation
-            td3_action = zeros(3, 1);
+            td3_action = [15; 15; 8];  % Default bandwidths
             if obj.use_td3 && ~isempty(obj.td3_agent)
                 % Build state for TD3
                 % S_w = [e(t), e_i(t), e_dot(t), phi, theta, psi]'
                 td3_state = [mean(abs(e1)); mean(abs(obj.error_integral)); ...
                              mean(abs(error_derivative)); y(1); y(2); y(3)];
 
+                % Handle NaN/Inf in state
+                td3_state(~isfinite(td3_state)) = 0;
+
                 % Get action from TD3 (ADRC bandwidths)
                 td3_action = obj.td3_agent.select_action(td3_state, false);
+
+                % Validate action (protect against untrained network)
+                if any(~isfinite(td3_action))
+                    td3_action = [15; 15; 8];  % Use defaults
+                end
 
                 % Apply TD3 action to ADRC parameters
                 obj.nlsef_roll.set_bandwidth(td3_action(1));
@@ -186,6 +194,13 @@ classdef td3_adrc_controller < handle
             [tau_y, ~] = obj.nlsef_yaw.compute(e1(3), e2(3), z3(3));
 
             tau = [tau_r; tau_p; tau_y];
+
+            % Protect against NaN/Inf
+            tau(~isfinite(tau)) = 0;
+
+            % Saturate control output
+            tau_max = [0.5; 0.5; 0.3];
+            tau = max(-tau_max, min(tau_max, tau));
 
             %% Logging
             obj.log.time(end+1) = t;

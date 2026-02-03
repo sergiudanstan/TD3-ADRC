@@ -72,21 +72,25 @@ function params = adrc_params()
 
     %% Channel-Specific ADRC Gains
     % Different dynamics for roll, pitch, yaw require different tuning
+    % b0 = 1/I for attitude dynamics (tau = I * omega_dot => omega_dot = tau/I)
+
+    % Get inertia values for b0 calculation
+    quad = quadrotor_params();
 
     % Roll channel (fast dynamics)
-    params.roll.eso_omega = 100;
-    params.roll.nlsef_omega = 20;
-    params.roll.b0 = 1.0;         % Control gain estimate
+    params.roll.eso_omega = 50;
+    params.roll.nlsef_omega = 15;
+    params.roll.b0 = 1 / quad.Ixx;  % ~47.4 for Ixx=0.0211
 
     % Pitch channel (fast dynamics)
-    params.pitch.eso_omega = 100;
-    params.pitch.nlsef_omega = 20;
-    params.pitch.b0 = 1.0;
+    params.pitch.eso_omega = 50;
+    params.pitch.nlsef_omega = 15;
+    params.pitch.b0 = 1 / quad.Iyy;  % ~45.7 for Iyy=0.0219
 
     % Yaw channel (slower dynamics)
-    params.yaw.eso_omega = 60;
-    params.yaw.nlsef_omega = 10;
-    params.yaw.b0 = 0.5;
+    params.yaw.eso_omega = 30;
+    params.yaw.nlsef_omega = 8;
+    params.yaw.b0 = 1 / quad.Izz;   % ~27.3 for Izz=0.0366
 
     %% Disturbance Compensation
     params.disturbance.enable = true;
