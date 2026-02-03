@@ -1,0 +1,30 @@
+# MATLAB generated files
+*.asv
+*.m~
+*.mex*
+*.mlappinstall
+*.mlpkginstall
+slprj/
+*.slxc
+
+# Results (large files)
+results/figures/*.png
+results/animations/**/*.json
+results/*.csv
+!results/.gitkeep
+
+# Trained models
+*.mat
+
+# Blender
+*.blend1
+*.blend2
+__pycache__/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
