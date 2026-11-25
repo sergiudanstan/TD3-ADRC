@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege by default; no job here needs to write anything.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: matlab tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Base MATLAB only: the networks, TD3 agent and ADRC are plain MATLAB, so
+      # no Deep Learning or Reinforcement Learning Toolbox is installed.
+      - uses: matlab-actions/setup-matlab@f9e43010f1ae678f7cfa0542fe2a4f60f7d1ad8d # v3.1.0
+        with:
+          release: R2025b
+      - name: Run tests/run_all_tests.m (any failing test fails the job)
+        uses: matlab-actions/run-command@bfa857648f4895aa98a446fe41c85e0788421ed5 # v3.3.0
+        with:
+          command: addpath('tests'); r = run_all_tests(); assert(r.passed == 10 && r.failed == 0, 'run_all_tests: %d passed, %d failed', r.passed, r.failed);
+
+  lint:
+    name: python lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install ruff (hash-pinned)
+        run: python -m pip install --require-hashes -r .github/requirements-ci.lock
+      # Syntax errors, undefined names and invalid constructs in the Blender script.
+      # The full default rule set also reports import order and an unused import in
+      # legacy code, which is out of scope here.
+      - name: Ruff on the Blender script
+        run: ruff check --select E9,F63,F7,F82 blender/
+
+  audit:
+    name: security audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install audit tooling (hash-pinned)
+        run: python -m pip install --require-hashes -r .github/requirements-ci.lock
+      - name: Known vulnerabilities in the CI toolchain
+        run: pip-audit --strict --no-deps -r .github/requirements-ci.lock --progress-spinner off
+      - name: Audit the workflows themselves
+        run: zizmor --format plain .github/workflows/
