@@ -1,5 +1,10 @@
 # TD3-ADRC: Intelligent Control for Quadrotors
 
+[![CI](https://github.com/sergiudanstan/TD3-ADRC/actions/workflows/ci.yml/badge.svg)](https://github.com/sergiudanstan/TD3-ADRC/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/sergiudanstan/TD3-ADRC/actions/workflows/codeql.yml/badge.svg)](https://github.com/sergiudanstan/TD3-ADRC/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/sergiudanstan/TD3-ADRC/badge)](https://scorecard.dev/viewer/?uri=github.com/sergiudanstan/TD3-ADRC)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Twin Delayed Deep Deterministic Policy Gradient + Active Disturbance Rejection Control for quadrotor UAVs.
 
 ![TD3-ADRC vs PID, ADRC and DDPG-ADRC: roll, pitch and yaw tracking, absolute error and integral absolute error](docs/controller_comparison.png)
@@ -87,11 +92,12 @@ The TD3-ADRC parameters here are not from a fully trained agent, so the gain is 
 
 ## Requirements
 
-- MATLAB R2023b or later
-- Deep Learning Toolbox
-- Reinforcement Learning Toolbox
-- Simulink (optional)
-- Blender 3.6+ (for visualization)
+- MATLAB R2023b or later (CI runs R2025b). Base MATLAB only: the actor and critic networks, the TD3 agent and the ADRC are implemented in plain MATLAB, and no Deep Learning or Reinforcement Learning Toolbox function is called in `src/`, `params/` or `tests/`
+- Blender 3.6+ (for visualization, optional)
+
+## Development
+
+`addpath('tests'); run_all_tests;` runs the ten unit tests (tracking differentiator, ESO, nonlinear feedback, tanh function, parameters, replay buffer, actor, critic, controller, dynamics); CI runs the same file and fails if any test fails. See [CONTRIBUTING.md](CONTRIBUTING.md) for branches and releases, [SECURITY.md](SECURITY.md) for reporting vulnerabilities, and [CHANGELOG.md](CHANGELOG.md) for history.
 
 ## References
 
