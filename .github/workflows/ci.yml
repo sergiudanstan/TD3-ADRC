@@ -26,7 +26,10 @@ jobs:
       - name: Run tests/run_all_tests.m (any failing test fails the job)
         uses: matlab-actions/run-command@bfa857648f4895aa98a446fe41c85e0788421ed5 # v3.3.0
         with:
-          command: addpath('tests'); r = run_all_tests(); assert(r.passed == 10 && r.failed == 0, 'run_all_tests: %d passed, %d failed', r.passed, r.failed);
+          command: |
+            addpath('tests');
+            r = run_all_tests();
+            assert(r.passed == 10 && r.failed == 0, 'run_all_tests: %d passed, %d failed', r.passed, r.failed);
 
   lint:
     name: python lint
