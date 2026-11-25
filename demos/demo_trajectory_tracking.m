@@ -72,94 +72,6 @@ adrc_ctrl = td3_adrc_controller(Ts, false);
 td3_adrc_ctrl = td3_adrc_controller(Ts, true);
 
 %% Simulation Function with Detailed Dynamics
-function results = simulate_tracking(ctrl_type, ctrl, ref, D, t, quad_params, pid_params)
-    N = length(t);
-    Ts = t(2) - t(1);
-
-    % State: [phi, theta, psi, p, q, r]
-    x = zeros(6, 1);
-
-    % Logging
-    y_hist = zeros(3, N);
-    u_hist = zeros(3, N);
-    e_hist = zeros(3, N);
-    omega_hist = zeros(3, N);
-
-    % Inertia
-    I = diag([quad_params.Ixx, quad_params.Iyy, quad_params.Izz]);
-
-    % Friction
-    kf = [quad_params.kfp; quad_params.kfq; quad_params.kfr];
-
-    for i = 1:N
-        euler = x(1:3);
-        omega = x(4:6);
-        ref_i = ref(:, i);
-        tau_dist = D(4:6, i);
-
-        % Compute control
-        switch ctrl_type
-            case 'PID'
-                e = ref_i - euler;
-                pid_params.integral = pid_params.integral + e * Ts;
-                % Anti-windup
-                pid_params.integral = max(-0.5, min(0.5, pid_params.integral));
-                e_dot = (e - pid_params.last_error) / Ts;
-                pid_params.last_error = e;
-
-                tau = pid_params.kp .* e + pid_params.ki .* pid_params.integral + ...
-                      pid_params.kd .* e_dot;
-
-            case 'ADRC'
-                [tau, ~] = ctrl.compute_control(ref_i, euler, t(i));
-
-            case 'TD3-ADRC'
-                [tau, ~] = ctrl.compute_control(ref_i, euler, t(i));
-        end
-
-        % Saturate control
-        tau_max = [0.5; 0.5; 0.3];
-        tau = max(-tau_max, min(tau_max, tau));
-
-        % Dynamics
-        gyro = cross(omega, I * omega);
-        friction = -kf .* omega;
-        omega_dot = I \ (tau + friction - gyro + tau_dist);
-
-        % Kinematics
-        phi = euler(1); theta = euler(2);
-        sphi = sin(phi); cphi = cos(phi);
-        cth = cos(theta); tth = tan(theta);
-
-        if abs(cth) < 1e-6
-            cth = sign(cth) * 1e-6;
-            tth = sin(theta) / cth;
-        end
-
-        euler_dot = [
-            omega(1) + sphi * tth * omega(2) + cphi * tth * omega(3);
-            cphi * omega(2) - sphi * omega(3);
-            (sphi/cth) * omega(2) + (cphi/cth) * omega(3)
-        ];
-
-        % Integrate
-        x(1:3) = x(1:3) + Ts * euler_dot;
-        x(4:6) = x(4:6) + Ts * omega_dot;
-
-        % Log
-        y_hist(:, i) = euler;
-        u_hist(:, i) = tau;
-        e_hist(:, i) = ref_i - euler;
-        omega_hist(:, i) = omega;
-    end
-
-    results.time = t;
-    results.reference = ref;
-    results.output = y_hist;
-    results.control = u_hist;
-    results.error = e_hist;
-    results.angular_rate = omega_hist;
-end
 
 %% Run Simulations
 fprintf('Running trajectory tracking simulations...\n');
@@ -304,6 +216,97 @@ export_comparison_to_blender(results_cell, controller_names, output_dir);
 fprintf('\nDemo complete!\n');
 
 %% Helper Functions
+
+%% Local functions
+function results = simulate_tracking(ctrl_type, ctrl, ref, D, t, quad_params, pid_params)
+    N = length(t);
+    Ts = t(2) - t(1);
+
+    % State: [phi, theta, psi, p, q, r]
+    x = zeros(6, 1);
+
+    % Logging
+    y_hist = zeros(3, N);
+    u_hist = zeros(3, N);
+    e_hist = zeros(3, N);
+    omega_hist = zeros(3, N);
+
+    % Inertia
+    I = diag([quad_params.Ixx, quad_params.Iyy, quad_params.Izz]);
+
+    % Friction
+    kf = [quad_params.kfp; quad_params.kfq; quad_params.kfr];
+
+    for i = 1:N
+        euler = x(1:3);
+        omega = x(4:6);
+        ref_i = ref(:, i);
+        tau_dist = D(4:6, i);
+
+        % Compute control
+        switch ctrl_type
+            case 'PID'
+                e = ref_i - euler;
+                pid_params.integral = pid_params.integral + e * Ts;
+                % Anti-windup
+                pid_params.integral = max(-0.5, min(0.5, pid_params.integral));
+                e_dot = (e - pid_params.last_error) / Ts;
+                pid_params.last_error = e;
+
+                tau = pid_params.kp .* e + pid_params.ki .* pid_params.integral + ...
+                      pid_params.kd .* e_dot;
+
+            case 'ADRC'
+                [tau, ~] = ctrl.compute_control(ref_i, euler, t(i));
+
+            case 'TD3-ADRC'
+                [tau, ~] = ctrl.compute_control(ref_i, euler, t(i));
+        end
+
+        % Saturate control
+        tau_max = [0.5; 0.5; 0.3];
+        tau = max(-tau_max, min(tau_max, tau));
+
+        % Dynamics
+        gyro = cross(omega, I * omega);
+        friction = -kf .* omega;
+        omega_dot = I \ (tau + friction - gyro + tau_dist);
+
+        % Kinematics
+        phi = euler(1); theta = euler(2);
+        sphi = sin(phi); cphi = cos(phi);
+        cth = cos(theta); tth = tan(theta);
+
+        if abs(cth) < 1e-6
+            cth = sign(cth) * 1e-6;
+            tth = sin(theta) / cth;
+        end
+
+        euler_dot = [
+            omega(1) + sphi * tth * omega(2) + cphi * tth * omega(3);
+            cphi * omega(2) - sphi * omega(3);
+            (sphi/cth) * omega(2) + (cphi/cth) * omega(3)
+        ];
+
+        % Integrate
+        x(1:3) = x(1:3) + Ts * euler_dot;
+        x(4:6) = x(4:6) + Ts * omega_dot;
+
+        % Log
+        y_hist(:, i) = euler;
+        u_hist(:, i) = tau;
+        e_hist(:, i) = ref_i - euler;
+        omega_hist(:, i) = omega;
+    end
+
+    results.time = t;
+    results.reference = ref;
+    results.output = y_hist;
+    results.control = u_hist;
+    results.error = e_hist;
+    results.angular_rate = omega_hist;
+end
+
 function metrics = compute_tracking_metrics(results)
     e = results.error;
     y = results.output;

@@ -79,119 +79,6 @@ ddpg_adrc_params.yaw.nlsef_omega = 9;
 td3_adrc_ctrl = td3_adrc_controller(Ts, true);
 
 %% Unified Simulation Function
-function results = run_simulation(ctrl_type, ref, D, t, quad_params, ctrl_params)
-    N = length(t);
-    Ts = t(2) - t(1);
-
-    x = zeros(6, 1);  % [phi, theta, psi, p, q, r]
-
-    y_hist = zeros(3, N);
-    u_hist = zeros(3, N);
-    e_hist = zeros(3, N);
-
-    I = diag([quad_params.Ixx, quad_params.Iyy, quad_params.Izz]);
-    kf = [quad_params.kfp; quad_params.kfq; quad_params.kfr];
-
-    % Controller state
-    if strcmp(ctrl_type, 'PID')
-        integral = zeros(3, 1);
-        last_error = zeros(3, 1);
-    elseif strcmp(ctrl_type, 'ADRC') || strcmp(ctrl_type, 'DDPG-ADRC')
-        % Create ADRC components manually
-        td_r = tracking_differentiator(100, Ts);
-        td_p = tracking_differentiator(100, Ts);
-        td_y = tracking_differentiator(100, Ts);
-
-        eso_r = extended_state_observer(ctrl_params.roll.eso_omega, ctrl_params.roll.b0, Ts);
-        eso_p = extended_state_observer(ctrl_params.pitch.eso_omega, ctrl_params.pitch.b0, Ts);
-        eso_y = extended_state_observer(ctrl_params.yaw.eso_omega, ctrl_params.yaw.b0, Ts);
-
-        nlsef_r = nonlinear_feedback(ctrl_params.roll.nlsef_omega, ctrl_params.roll.b0, Ts);
-        nlsef_p = nonlinear_feedback(ctrl_params.pitch.nlsef_omega, ctrl_params.pitch.b0, Ts);
-        nlsef_y = nonlinear_feedback(ctrl_params.yaw.nlsef_omega, ctrl_params.yaw.b0, Ts);
-
-        last_u = zeros(3, 1);
-    elseif strcmp(ctrl_type, 'TD3-ADRC')
-        ctrl_params.reset();
-    end
-
-    for i = 1:N
-        euler = x(1:3);
-        omega = x(4:6);
-        ref_i = ref(:, i);
-        tau_dist = D(4:6, i);
-
-        % Compute control based on type
-        switch ctrl_type
-            case 'PID'
-                e = ref_i - euler;
-                integral = integral + e * Ts;
-                integral = max(-0.5, min(0.5, integral));
-                e_dot = (e - last_error) / Ts;
-                last_error = e;
-                tau = ctrl_params.kp .* e + ctrl_params.ki .* integral + ctrl_params.kd .* e_dot;
-
-            case {'ADRC', 'DDPG-ADRC'}
-                [v1_r, v2_r] = td_r.update(ref_i(1), Ts);
-                [v1_p, v2_p] = td_p.update(ref_i(2), Ts);
-                [v1_y, v2_y] = td_y.update(ref_i(3), Ts);
-
-                [z1_r, z2_r, z3_r] = eso_r.update(euler(1), last_u(1), Ts);
-                [z1_p, z2_p, z3_p] = eso_p.update(euler(2), last_u(2), Ts);
-                [z1_y, z2_y, z3_y] = eso_y.update(euler(3), last_u(3), Ts);
-
-                [tau_r, ~] = nlsef_r.compute(v1_r - z1_r, v2_r - z2_r, z3_r);
-                [tau_p, ~] = nlsef_p.compute(v1_p - z1_p, v2_p - z2_p, z3_p);
-                [tau_y, ~] = nlsef_y.compute(v1_y - z1_y, v2_y - z2_y, z3_y);
-
-                tau = [tau_r; tau_p; tau_y];
-                last_u = tau;
-
-            case 'TD3-ADRC'
-                [tau, ~] = ctrl_params.compute_control(ref_i, euler, t(i));
-        end
-
-        % Saturate control
-        tau_max = [0.5; 0.5; 0.3];
-        tau = max(-tau_max, min(tau_max, tau));
-
-        % Dynamics
-        gyro = cross(omega, I * omega);
-        friction = -kf .* omega;
-        omega_dot = I \ (tau + friction - gyro + tau_dist);
-
-        % Kinematics
-        phi = euler(1); theta = euler(2);
-        sphi = sin(phi); cphi = cos(phi);
-        cth = cos(theta); tth = tan(theta);
-
-        if abs(cth) < 1e-6
-            cth = sign(cth) * 1e-6;
-            tth = sin(theta) / cth;
-        end
-
-        euler_dot = [
-            omega(1) + sphi * tth * omega(2) + cphi * tth * omega(3);
-            cphi * omega(2) - sphi * omega(3);
-            (sphi/cth) * omega(2) + (cphi/cth) * omega(3)
-        ];
-
-        % Integrate
-        x(1:3) = x(1:3) + Ts * euler_dot;
-        x(4:6) = x(4:6) + Ts * omega_dot;
-
-        % Log
-        y_hist(:, i) = euler;
-        u_hist(:, i) = tau;
-        e_hist(:, i) = ref_i - euler;
-    end
-
-    results.time = t;
-    results.reference = ref;
-    results.output = y_hist;
-    results.control = u_hist;
-    results.error = e_hist;
-end
 
 %% Run All Simulations
 fprintf('Running simulations for all controllers...\n');
@@ -212,15 +99,6 @@ results_td3 = run_simulation('TD3-ADRC', ref, D, t, quad_params, td3_adrc_ctrl);
 %% Compute Metrics
 fprintf('\nComputing performance metrics...\n');
 
-function m = compute_iae(results)
-    e = results.error;
-    t = results.time;
-    dt = mean(diff(t));
-    m.roll = sum(abs(e(1, :))) * dt * 180/pi;   % Convert to deg*s
-    m.pitch = sum(abs(e(2, :))) * dt * 180/pi;
-    m.yaw = sum(abs(e(3, :))) * dt * 180/pi;
-    m.total = m.roll + m.pitch + m.yaw;
-end
 
 iae_pid = compute_iae(results_pid);
 iae_adrc = compute_iae(results_adrc);
@@ -368,3 +246,128 @@ writetable(T, fullfile('results', 'performance_comparison.csv'), 'WriteRowNames'
 fprintf('\n==============================================\n');
 fprintf('Demo complete! Results saved to results/\n');
 fprintf('==============================================\n');
+
+%% Local functions
+function results = run_simulation(ctrl_type, ref, D, t, quad_params, ctrl_params)
+    N = length(t);
+    Ts = t(2) - t(1);
+
+    x = zeros(6, 1);  % [phi, theta, psi, p, q, r]
+
+    y_hist = zeros(3, N);
+    u_hist = zeros(3, N);
+    e_hist = zeros(3, N);
+
+    I = diag([quad_params.Ixx, quad_params.Iyy, quad_params.Izz]);
+    kf = [quad_params.kfp; quad_params.kfq; quad_params.kfr];
+
+    % Controller state
+    if strcmp(ctrl_type, 'PID')
+        integral = zeros(3, 1);
+        last_error = zeros(3, 1);
+    elseif strcmp(ctrl_type, 'ADRC') || strcmp(ctrl_type, 'DDPG-ADRC')
+        % Create ADRC components manually
+        td_r = tracking_differentiator(100, Ts);
+        td_p = tracking_differentiator(100, Ts);
+        td_y = tracking_differentiator(100, Ts);
+
+        eso_r = extended_state_observer(ctrl_params.roll.eso_omega, ctrl_params.roll.b0, Ts);
+        eso_p = extended_state_observer(ctrl_params.pitch.eso_omega, ctrl_params.pitch.b0, Ts);
+        eso_y = extended_state_observer(ctrl_params.yaw.eso_omega, ctrl_params.yaw.b0, Ts);
+
+        nlsef_r = nonlinear_feedback(ctrl_params.roll.nlsef_omega, ctrl_params.roll.b0, Ts);
+        nlsef_p = nonlinear_feedback(ctrl_params.pitch.nlsef_omega, ctrl_params.pitch.b0, Ts);
+        nlsef_y = nonlinear_feedback(ctrl_params.yaw.nlsef_omega, ctrl_params.yaw.b0, Ts);
+
+        last_u = zeros(3, 1);
+    elseif strcmp(ctrl_type, 'TD3-ADRC')
+        ctrl_params.reset();
+    end
+
+    for i = 1:N
+        euler = x(1:3);
+        omega = x(4:6);
+        ref_i = ref(:, i);
+        tau_dist = D(4:6, i);
+
+        % Compute control based on type
+        switch ctrl_type
+            case 'PID'
+                e = ref_i - euler;
+                integral = integral + e * Ts;
+                integral = max(-0.5, min(0.5, integral));
+                e_dot = (e - last_error) / Ts;
+                last_error = e;
+                tau = ctrl_params.kp .* e + ctrl_params.ki .* integral + ctrl_params.kd .* e_dot;
+
+            case {'ADRC', 'DDPG-ADRC'}
+                [v1_r, v2_r] = td_r.update(ref_i(1), Ts);
+                [v1_p, v2_p] = td_p.update(ref_i(2), Ts);
+                [v1_y, v2_y] = td_y.update(ref_i(3), Ts);
+
+                [z1_r, z2_r, z3_r] = eso_r.update(euler(1), last_u(1), Ts);
+                [z1_p, z2_p, z3_p] = eso_p.update(euler(2), last_u(2), Ts);
+                [z1_y, z2_y, z3_y] = eso_y.update(euler(3), last_u(3), Ts);
+
+                [tau_r, ~] = nlsef_r.compute(v1_r - z1_r, v2_r - z2_r, z3_r);
+                [tau_p, ~] = nlsef_p.compute(v1_p - z1_p, v2_p - z2_p, z3_p);
+                [tau_y, ~] = nlsef_y.compute(v1_y - z1_y, v2_y - z2_y, z3_y);
+
+                tau = [tau_r; tau_p; tau_y];
+                last_u = tau;
+
+            case 'TD3-ADRC'
+                [tau, ~] = ctrl_params.compute_control(ref_i, euler, t(i));
+        end
+
+        % Saturate control
+        tau_max = [0.5; 0.5; 0.3];
+        tau = max(-tau_max, min(tau_max, tau));
+
+        % Dynamics
+        gyro = cross(omega, I * omega);
+        friction = -kf .* omega;
+        omega_dot = I \ (tau + friction - gyro + tau_dist);
+
+        % Kinematics
+        phi = euler(1); theta = euler(2);
+        sphi = sin(phi); cphi = cos(phi);
+        cth = cos(theta); tth = tan(theta);
+
+        if abs(cth) < 1e-6
+            cth = sign(cth) * 1e-6;
+            tth = sin(theta) / cth;
+        end
+
+        euler_dot = [
+            omega(1) + sphi * tth * omega(2) + cphi * tth * omega(3);
+            cphi * omega(2) - sphi * omega(3);
+            (sphi/cth) * omega(2) + (cphi/cth) * omega(3)
+        ];
+
+        % Integrate
+        x(1:3) = x(1:3) + Ts * euler_dot;
+        x(4:6) = x(4:6) + Ts * omega_dot;
+
+        % Log
+        y_hist(:, i) = euler;
+        u_hist(:, i) = tau;
+        e_hist(:, i) = ref_i - euler;
+    end
+
+    results.time = t;
+    results.reference = ref;
+    results.output = y_hist;
+    results.control = u_hist;
+    results.error = e_hist;
+end
+
+function m = compute_iae(results)
+    e = results.error;
+    t = results.time;
+    dt = mean(diff(t));
+    m.roll = sum(abs(e(1, :))) * dt * 180/pi;   % Convert to deg*s
+    m.pitch = sum(abs(e(2, :))) * dt * 180/pi;
+    m.yaw = sum(abs(e(3, :))) * dt * 180/pi;
+    m.total = m.roll + m.pitch + m.yaw;
+end
