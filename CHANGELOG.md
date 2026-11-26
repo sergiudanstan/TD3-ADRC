@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-26
+
+### Fixed
+- README: removed the "37.28% improvement" claim and the transcribed hardware results table. The
+  paper's abstract (the only part verified) states no such figure, and the table contradicted
+  the claim. The README now cites the paper's DOI and says the demo results come from an
+  untrained agent.
+
+### Removed
+- `CLAUDE.md` and `plan.md` (agent and planning files, not referenced by CI, tests or docs).
+
 ## [0.1.0] - 2026-11-25
 
 First tagged release. A MATLAB implementation of TD3-ADRC for quadrotor attitude control
@@ -28,5 +39,6 @@ MATLAB MCP tool entry points.
 - README listed the Deep Learning Toolbox, Reinforcement Learning Toolbox and Simulink as
   requirements; none of them is called anywhere in `src/`, `params/` or `tests/`.
 
-[Unreleased]: https://github.com/sergiudanstan/TD3-ADRC/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sergiudanstan/TD3-ADRC/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/sergiudanstan/TD3-ADRC/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sergiudanstan/TD3-ADRC/releases/tag/v0.1.0
