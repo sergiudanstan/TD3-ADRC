@@ -15,7 +15,7 @@ Twin Delayed Deep Deterministic Policy Gradient + Active Disturbance Rejection C
 
 This project implements the **TD3-ADRC** intelligent controller based on "Intelligent Control for Quadrotors Based on a Novel Method: TD3-ADRC" (Cai et al., 2026). The method combines deep reinforcement learning (TD3) with enhanced ADRC using a parameterized tanh function for superior disturbance rejection.
 
-**Key idea** (the paper reports a **37.28% improvement** over traditional ADRC):
+**Key idea**:
 - Twin Q-networks (mitigate overestimation)
 - Delayed policy updates (training stability)
 - Novel parameterized tanh function (smooth, continuous nonlinearity)
@@ -81,14 +81,7 @@ Simulation in this repository (`demo_comparison`, step + sinusoidal attitude com
 | DDPG-ADRC  | 3.17     | 1.69      | 3.90    | +3.1%   |
 | **TD3-ADRC** | **2.83** | **1.50** | **3.93** | **+8.6%** |
 
-The TD3-ADRC parameters here are not from a fully trained agent, so the gain is smaller than in the paper. Results reported by Cai et al. on hardware:
-
-| Controller | Roll IAE | Pitch IAE | Yaw IAE | Improvement |
-|------------|----------|-----------|---------|-------------|
-| PID        | 80.27    | 70.13     | 93.48   | baseline    |
-| ADRC       | 138.08   | 81.75     | 98.42   | -           |
-| DDPG-ADRC  | 85.34    | 59.27     | 67.68   | +22%        |
-| **TD3-ADRC** | **33.50** | **38.43** | **51.68** | **+37%** |
+The TD3-ADRC parameters here are not from a fully trained agent, so these numbers are this repository's own demo results and do not reproduce the paper's. The paper's abstract states only that TD3-ADRC outperforms conventional PID and linear ADRC under complex conditions, in Simulink simulation and on a PX4 bench test (Cai et al., *Drones* 2026, 10(2), 110, https://doi.org/10.3390/drones10020110). Its quantitative results are in the paper itself and are not reproduced here.
 
 ## Requirements
 
@@ -101,7 +94,7 @@ The TD3-ADRC parameters here are not from a fully trained agent, so the gain is 
 
 ## References
 
-Cai et al. (2026). "Intelligent Control for Quadrotors Based on a Novel Method: TD3-ADRC"
+Cai et al. (2026). "Intelligent Control for Quadrotors Based on a Novel Method: TD3-ADRC". *Drones* 10(2), 110. https://doi.org/10.3390/drones10020110
 
 ## License
 
